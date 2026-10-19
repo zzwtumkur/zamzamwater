@@ -1,0 +1,3 @@
+import { NextRequest,NextResponse } from 'next/server';import {createSession} from '@/lib/server';import {timingSafeEqual} from 'node:crypto';
+function same(a:string,b:string){const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y)}
+export async function POST(req:NextRequest){const {username,password}=await req.json();const u=process.env.ADMIN_USERNAME,p=process.env.ADMIN_PASSWORD;if(!u||!p||!same(String(username||''),u)||!same(String(password||''),p))return NextResponse.json({error:'Invalid credentials'},{status:401});const res=NextResponse.json({ok:true});res.cookies.set('zamzam_session',await createSession(),{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',maxAge:43200});return res}

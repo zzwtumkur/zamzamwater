@@ -1,0 +1,2 @@
+import {db,error} from '@/lib/server';
+export async function POST(req:Request){const {pincode}=await req.json().catch(()=>({}));const value=String(pincode||'').trim();if(!/^\d{6}$/.test(value))return error('Enter a valid 6-digit pincode');const {data,error:e}=await db().from('service_pincodes').select('pincode,area_name').eq('pincode',value).eq('active',true).maybeSingle();if(e)return error('Service-area check is temporarily unavailable',500);return data?Response.json({available:true,...data}):Response.json({available:false,pincode:value})}
