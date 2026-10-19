@@ -1,6 +1,7 @@
 import "./style.css";
 import type { Metadata } from "next";
 import { SiteHeader } from "../components/site-header";
+import { SiteLanguage } from "../components/site-language";
 
 export const metadata: Metadata = {
   title: "Zam Zam Water | Tumkur",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <SiteLanguage />
         <SiteHeader />
 
         <main>{children}</main>

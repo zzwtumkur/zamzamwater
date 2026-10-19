@@ -16,8 +16,11 @@ For an existing project, do not rerun `schema.sql`. Apply only the migrations ne
 4. `supabase/migration_product_delete.sql`
 5. `supabase/migration_unbounded_product_quantities.sql`
 6. `supabase/migration_customer_payments.sql`
+7. `supabase/migration_quarter_hour_delivery_slots.sql`
+8. `supabase/migration_saved_order_pincode.sql`
+9. `supabase/migration_delivery_slot_pricing.sql`
 
-Run each required SQL file once in the Supabase SQL Editor. The final migration removes the old 50-bottle product/order limits for databases that already applied earlier migrations. Stock and order quantities are positive integers up to the PostgreSQL `int` limit (2,147,483,647).
+Run each required SQL file once in the Supabase SQL Editor. The quarter-hour schedule migration keeps existing slot rows for order history, disables the old delivery windows, and creates 96 active 15-minute IST windows with a default capacity of 5 per window. The saved-pincode migration lets returning customers reuse or edit the pincode from their latest order. The delivery-slot pricing migration applies scheduled prices using the delivery time chosen by the customer. The quantity migration removes the old 50-bottle product/order limits; stock and order quantities are positive integers up to the PostgreSQL `int` limit (2,147,483,647).
 
 ## 3. Environment
 Copy `.env.example` to `.env.local`. Fill in:

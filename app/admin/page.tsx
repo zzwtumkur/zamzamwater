@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 type Order = {
   id: string;
   order_number: string;
@@ -50,6 +50,7 @@ type PriceSchedule = {
   products: { litres: number; kind: string } | null;
 };
 type ServicePincode = { id:string; pincode:string; area_name:string; active:boolean };
+type Customer = { phone:string;name:string;pincode:string;address:string;landmark:string;order_count:number;total_spent:number;last_order_at:string;original_phone?:string };
 type PaymentCustomer = { phone: string; name: string };
 type PaymentRequest = {
   id: string;
@@ -110,6 +111,9 @@ export default function Admin() {
     [settings, setSettings] = useState<Settings | null>(null),
     [message, setMessage] = useState(""),
     [search, setSearch] = useState(""),
+    [customers,setCustomers]=useState<Customer[]>([]),
+    [customerSearch,setCustomerSearch]=useState(""),
+    [editingCustomerPhone,setEditingCustomerPhone]=useState<string|null>(null),
     [busy, setBusy] = useState(false),
     [reportFrom, setReportFrom] = useState(initialMonthStart),
     [reportTo, setReportTo] = useState(initialToday),
@@ -293,6 +297,9 @@ export default function Admin() {
     }
   }
   async function loadPincodes(){try{setPincodes(await api("/api/admin/pincodes"))}catch(e){setMessage(e instanceof Error?`Pincodes unavailable: ${e.message}`:"Pincodes unavailable")}}
+  async function loadCustomers(){try{const data=await api("/api/admin/customers");setCustomers(data.map((customer:Customer)=>({...customer,original_phone:customer.phone})))}catch(e){setMessage(e instanceof Error?`Customers unavailable: ${e.message}`:"Customers unavailable")}}
+  async function saveCustomer(customer:Customer){setMessage("");try{await api("/api/admin/customers","PATCH",{...customer,original_phone:customer.original_phone||customer.phone});setEditingCustomerPhone(null);setMessage("Customer details saved successfully");await Promise.all([loadCustomers(),refresh()])}catch(e){setMessage(e instanceof Error?e.message:"Customer could not be saved")}}
+  async function deleteCustomer(customer:Customer){if(!window.confirm(`Permanently delete ${customer.name}, all ${customer.order_count} orders and payment records? This cannot be undone.`))return;setMessage("");try{await api("/api/admin/customers","DELETE",{phone:customer.original_phone||customer.phone});setMessage("Customer and related records deleted successfully");await Promise.all([loadCustomers(),refresh()])}catch(e){setMessage(e instanceof Error?e.message:"Customer could not be deleted")}}
   async function addPincode(e:React.FormEvent){e.preventDefault();setBusy(true);setMessage("");try{await api("/api/admin/pincodes","POST",newPincode);setNewPincode({pincode:"",area_name:""});setMessage("Service pincode added successfully");await loadPincodes()}catch(e){setMessage(e instanceof Error?e.message:"Pincode could not be added")}finally{setBusy(false)}}
   async function savePincode(p:ServicePincode){setMessage("");try{await api("/api/admin/pincodes","PATCH",p);setMessage("Pincode saved successfully");await loadPincodes()}catch(e){setMessage(e instanceof Error?e.message:"Pincode could not be saved")}}
   async function loadPayments() {
@@ -530,6 +537,7 @@ export default function Admin() {
         {[
           "Dashboard",
           "Orders",
+          "Customers",
           "Products",
           "Delivery Slots",
           "Service Pincodes",
@@ -544,6 +552,7 @@ export default function Admin() {
               setTab(t);
               setAdminMenuOpen(false);
               if (t === "Products") void loadPricing();
+              if (t === "Customers") void loadCustomers();
               if (t === "Service Pincodes") void loadPincodes();
             }}
           >
@@ -598,6 +607,31 @@ export default function Admin() {
             />
           </div>
           <OrderTable orders={filtered} slots={slots} update={update} />
+        </div>
+      )}
+      {tab === "Customers" && (
+        <div className="panel">
+          <div className="section-heading"><div><div className="eyebrow">CUSTOMER DIRECTORY</div><h2>Customers</h2></div><p className="muted">Edit saved delivery details or permanently remove a customer and all related records.</p></div>
+          <div className="field"><input placeholder="Search by name, mobile number, pincode or address" value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)}/></div>
+          <div className="table-wrap customer-table-wrap"><table><thead><tr><th>Customer</th><th>Delivery area</th><th>Orders</th><th>Last order</th><th>Actions</th></tr></thead><tbody>
+            {customers.filter(customer=>`${customer.name} ${customer.phone} ${customer.pincode} ${customer.address}`.toLowerCase().includes(customerSearch.toLowerCase())).map(customer=><Fragment key={customer.original_phone}>
+              <tr className={editingCustomerPhone===customer.original_phone?"customer-summary-row expanded":"customer-summary-row"}>
+                <td><strong>{customer.name}</strong><small>{customer.phone}</small></td>
+                <td><strong>{customer.pincode||"No pincode"}</strong><small className="customer-address-preview">{customer.address}</small></td>
+                <td><strong>{customer.order_count}</strong><small>₹{customer.total_spent} total</small></td>
+                <td>{new Date(customer.last_order_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"})}</td>
+                <td><button className="secondary" onClick={()=>setEditingCustomerPhone(editingCustomerPhone===customer.original_phone?null:customer.original_phone||customer.phone)}>{editingCustomerPhone===customer.original_phone?"Close":"Edit"}</button> <button className="danger" onClick={()=>void deleteCustomer(customer)}>Delete</button></td>
+              </tr>
+              {editingCustomerPhone===customer.original_phone&&<tr className="customer-editor-row"><td colSpan={5}><div className="customer-editor-grid">
+                <div className="field"><label>Name</label><input value={customer.name} onChange={e=>setCustomers(customers.map(item=>item.original_phone===customer.original_phone?{...item,name:e.target.value}:item))}/></div>
+                <div className="field"><label>Mobile</label><input inputMode="numeric" maxLength={10} value={customer.phone} onChange={e=>setCustomers(customers.map(item=>item.original_phone===customer.original_phone?{...item,phone:e.target.value.replace(/\D/g,"").slice(0,10)}:item))}/></div>
+                <div className="field"><label>Pincode</label><input inputMode="numeric" maxLength={6} value={customer.pincode} onChange={e=>setCustomers(customers.map(item=>item.original_phone===customer.original_phone?{...item,pincode:e.target.value.replace(/\D/g,"").slice(0,6)}:item))}/></div>
+                <div className="field"><label>Landmark</label><input value={customer.landmark} onChange={e=>setCustomers(customers.map(item=>item.original_phone===customer.original_phone?{...item,landmark:e.target.value}:item))}/></div>
+                <div className="field customer-address-field"><label>Address</label><textarea value={customer.address} onChange={e=>setCustomers(customers.map(item=>item.original_phone===customer.original_phone?{...item,address:e.target.value}:item))}/></div>
+              </div><div className="customer-editor-actions"><button className="secondary" onClick={()=>{setEditingCustomerPhone(null);void loadCustomers()}}>Cancel</button><button onClick={()=>void saveCustomer(customer)}>Save changes</button></div></td></tr>}
+            </Fragment>)}
+            {!customers.length&&<tr><td colSpan={5}>No customers found.</td></tr>}
+          </tbody></table></div>
         </div>
       )}
       {tab === "Products" && (

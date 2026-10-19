@@ -10,14 +10,47 @@ type Product = {
   min_qty: number;
   max_qty: number;
 };
-type Slot = { id: string; label: string };
+type Slot = { id: string; label: string; start_time: string };
+type PricingWindow = { product_id: string; price: number; start_time: string; end_time: string };
 type Catalog = {
   products: Product[];
   slots: Slot[];
+  pricing_windows: PricingWindow[];
+  quarter_hour_schedule_ready: boolean;
   settings: { delivery_fee: number; min_order: number; business_phone: string };
 };
-type CustomerOrder = { order_number: string; delivery_date: string; total: number; status: string };
 const orderSteps = ["Mobile", "Pincode", "Details", "Delivery", "Bottle", "Quantity", "Review"];
+function indiaDateParts(timestamp: number) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(timestamp));
+  return Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+}
+
+function slotIsUpcoming(date: string, startTime: string, now = Date.now()) {
+  if (!date || !startTime) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = startTime.slice(0, 5).split(":").map(Number);
+  if (![year, month, day, hour, minute].every(Number.isFinite)) return false;
+  const slotTimestamp = Date.UTC(year, month - 1, day, hour, minute) - 330 * 60 * 1000;
+  return slotTimestamp > now;
+}
+
+function timeIsInWindow(time: string, window: PricingWindow) {
+  const selected = time.slice(0, 5);
+  const start = window.start_time.slice(0, 5);
+  const end = window.end_time.slice(0, 5);
+  return start < end
+    ? selected >= start && selected < end
+    : selected >= start || selected < end;
+}
+
 export default function Order() {
   const [catalog, setCatalog] = useState<Catalog | null>(null),
     [step, setStep] = useState(1),
@@ -32,10 +65,11 @@ export default function Order() {
     [locStatus, setLocStatus] = useState(""),
     [areaChecked, setAreaChecked] = useState(false),
     [areaMessage, setAreaMessage] = useState(""),
-    [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]),
+    [hasOrderHistory, setHasOrderHistory] = useState(false),
     [customerStatus, setCustomerStatus] = useState(""),
     [customerResolved, setCustomerResolved] = useState(false),
-    [customerLookupBusy, setCustomerLookupBusy] = useState(false);
+    [customerLookupBusy, setCustomerLookupBusy] = useState(false),
+    [currentTime, setCurrentTime] = useState(() => Date.now());
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -53,6 +87,10 @@ export default function Order() {
         setCatalog(x);
       })
       .catch((e) => setErr(e.message));
+  }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -89,22 +127,47 @@ export default function Order() {
     if (orderForm && !orderForm.reportValidity()) return;
     goToStep(nextStep);
   }
-  const products = catalog?.products.filter((p) => p.kind === kind) || [];
+  const selectedSlot = catalog?.slots.find((slot) => slot.id === form.slot_id);
+  const products = (catalog?.products.filter((p) => p.kind === kind) || []).map((product) => {
+    const scheduledPrice = selectedSlot
+      ? catalog?.pricing_windows.find((window) =>
+          window.product_id === product.id && timeIsInWindow(selectedSlot.start_time, window),
+        )
+      : undefined;
+    return {
+      ...product,
+      regular_price: product.price,
+      price: scheduledPrice?.price ?? product.price,
+      has_slot_price: scheduledPrice !== undefined,
+    };
+  });
+  const selectedSlotPriceChanges = selectedSlot
+    ? (catalog?.products || []).flatMap((product) => {
+        const window = catalog?.pricing_windows.find((priceWindow) =>
+          priceWindow.product_id === product.id && timeIsInWindow(selectedSlot.start_time, priceWindow),
+        );
+        return window && window.price !== product.price
+          ? [{ ...product, slot_price: window.price }]
+          : [];
+      })
+    : [];
   const items = products
     .filter((p) => (qty[p.id] || 0) > 0)
     .map((p) => ({ product_id: p.id, qty: qty[p.id] }));
   const subtotal = products.reduce((n, p) => n + (qty[p.id] || 0) * p.price, 0);
   const totalQuantity = items.reduce((sum, item) => sum + item.qty, 0);
   const total = subtotal + Number(catalog?.settings.delivery_fee || 0);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-  const end = new Date(today + "T00:00:00");
-  end.setDate(end.getDate() + 30);
-  const maxDate = end.toISOString().slice(0, 10);
+  const todayParts = indiaDateParts(currentTime);
+  const minDate = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+  const maxDate = new Date(Date.UTC(
+    Number(todayParts.year),
+    Number(todayParts.month) - 1,
+    Number(todayParts.day) + 30,
+  )).toISOString().slice(0, 10);
+  const eligibleSlots = catalog?.slots.filter((slot) =>
+    slotIsUpcoming(form.date, slot.start_time, currentTime),
+  ) || [];
+  const selectedSlotIsUpcoming = eligibleSlots.some((slot) => slot.id === form.slot_id);
   async function checkPincode(pincode = form.pincode) {
     setAreaChecked(false); setAreaMessage("Checking delivery availability...");
     try {
@@ -141,7 +204,7 @@ export default function Order() {
     setCustomerLookupBusy(true);
     setCustomerResolved(false);
     setCustomerStatus("Checking your mobile number...");
-    setCustomerOrders([]);
+    setHasOrderHistory(false);
     try {
       const r = await fetch("/api/customer", {
         method: "POST",
@@ -163,11 +226,12 @@ export default function Order() {
         name: x.customer.name || "",
         address: x.customer.address || "",
         landmark: x.customer.landmark || "",
+        pincode: x.customer.pincode || "",
       }));
       setGps(x.customer.latitude && x.customer.longitude
         ? { lat: x.customer.latitude, lng: x.customer.longitude }
         : null);
-      setCustomerOrders(x.orders || []);
+      setHasOrderHistory(!!x.has_orders);
       setCustomerStatus("Welcome back! Your saved details are ready to review.");
       goToStep(2);
     } catch (e) {
@@ -236,21 +300,6 @@ export default function Order() {
     );
   return (
     <div className="container order-shell">
-      {step === 1 && <div className="order-intro">
-        <div>
-          <div className="micro-label">ZAM ZAM WATER DELIVERY</div>
-          <h1>
-            Your hydration,
-            <br />
-            <strong>under control.</strong>
-          </h1>
-          <p>
-            No account required. Select a branded bottle, delivery date and
-            preferred time.
-          </p>
-        </div>
-        <img src="/products/zamzam-bottle.png" alt="Zam Zam Water bottle" />
-      </div>}
       {err && <div className="error">{err}</div>}
       {!catalog ? (
         <div className="panel">Loading products and delivery slots...</div>
@@ -307,7 +356,7 @@ export default function Order() {
                     }));
                     if (phone !== form.phone) {
                       setCustomerResolved(false);
-                      setCustomerOrders([]);
+                      setHasOrderHistory(false);
                       setCustomerStatus("");
                     }
                   }}
@@ -332,34 +381,18 @@ export default function Order() {
                 {customerStatus}
               </p>
             )}
-            {customerOrders.length > 0 && (
-              <div className="returning-orders">
-                <strong>Your recent orders</strong>
-                {customerOrders.slice(0, 3).map((order) => (
-                  <div key={order.order_number}>
-                    <span>{order.order_number} · {order.delivery_date}</span>
-                    <span>{order.status} · ₹{order.total}</span>
-                  </div>
-                ))}
-                <Link href="/track">View full order history →</Link>
-              </div>
-            )}
           </section>}
           {customerResolved && step === 2 && <section id="pincode-check" className="panel service-check">
             <h2>2. Check Delivery Pincode</h2>
             <p className="muted">Confirm service availability before entering your order.</p>
             {customerStatus && <p className={customerResolved ? "notice" : "muted"} role="status">{customerStatus}</p>}
-            {customerOrders.length > 0 && (
-              <div className="returning-orders">
-                <strong>Your recent orders</strong>
-                {customerOrders.slice(0, 3).map((order) => (
-                  <div key={order.order_number}>
-                    <span>{order.order_number} · {order.delivery_date}</span>
-                    <span>{order.status} · ₹{order.total}</span>
-                  </div>
-                ))}
-                <Link href="/track">View full order history →</Link>
-              </div>
+            {hasOrderHistory && (
+              <Link
+                className="btn secondary recent-orders-link"
+                href={`/track?phone=${encodeURIComponent(form.phone)}`}
+              >
+                View full order history →
+              </Link>
             )}
             <div className="pincode-check"><div className="field"><label>6-digit Pincode</label><input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={form.pincode} onChange={e=>{setForm({...form,pincode:e.target.value.replace(/\D/g,"").slice(0,6)});setAreaChecked(false);setAreaMessage("")}}/></div><button type="button" onClick={()=>checkPincode()} disabled={form.pincode.length!==6}>Check Availability</button></div>
             <button type="button" className="secondary" onClick={location}>
@@ -367,10 +400,10 @@ export default function Order() {
             </button>
             {locStatus && <p className="muted">{locStatus}</p>}
             {areaMessage&&<div className={areaChecked?"notice":"error"}>{areaMessage}</div>}
-            {areaChecked && <div className="wizard-actions">
+            <div className="wizard-actions">
               <button type="button" className="secondary" onClick={() => goToStep(1)}>Back</button>
-              <button type="button" onClick={() => goToStep(3)}>Continue to details</button>
-            </div>}
+              {areaChecked && <button type="button" onClick={() => goToStep(3)}>Continue to details</button>}
+            </div>
           </section>}
           {customerResolved && areaChecked && step === 3 && <section className="panel">
             <h2>3. Your Details</h2>
@@ -409,16 +442,21 @@ export default function Order() {
           </section>}
           {customerResolved && areaChecked && step === 4 && <section className="panel">
             <h2>4. Select Delivery Time</h2>
+            {!catalog.quarter_hour_schedule_ready ? (
+              <p className="error" role="status">
+                The 15-minute delivery schedule is not set up yet. Please contact the business to complete your order.
+              </p>
+            ) : <>
             <div className="grid">
               <div className="field">
                 <label>Delivery Date *</label>
                 <input
                   required
                   type="date"
-                  min={today}
+                  min={minDate}
                   max={maxDate}
                   value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  onChange={(e) => setForm({ ...form, date: e.target.value, slot_id: "" })}
                 />
               </div>
               <div className="field">
@@ -430,8 +468,8 @@ export default function Order() {
                     setForm({ ...form, slot_id: e.target.value })
                   }
                 >
-                  <option value="">Choose time</option>
-                  {catalog.slots.map((s) => (
+                  <option value="">{form.date ? "Choose available time" : "Choose a date first"}</option>
+                  {eligibleSlots.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label}
                     </option>
@@ -440,12 +478,27 @@ export default function Order() {
               </div>
             </div>
             <p className="muted">
-              Delivery time is requested and subject to confirmation by our
-              team.
+              Times are shown in IST. Every upcoming 15-minute slot is available across the full day and night.
             </p>
+            {selectedSlot && selectedSlotPriceChanges.length > 0 && (
+              <div className="notice" role="status">
+                <strong>Prices for {selectedSlot.label}:</strong>{" "}
+                {selectedSlotPriceChanges.map((product, index) => (
+                  <span key={product.id}>
+                    {index > 0 ? " · " : ""}
+                    {product.litres}L {product.kind}: ₹{product.slot_price}
+                    {" "}<small>(regular ₹{product.price})</small>
+                  </span>
+                ))}
+              </div>
+            )}
+            {form.date && eligibleSlots.length === 0 && (
+              <p className="error" role="status">No upcoming delivery slots remain on this date. Choose a later date.</p>
+            )}
+            </>}
             <div className="wizard-actions">
               <button type="button" className="secondary" onClick={() => goToStep(3)}>Back</button>
-              <button type="button" onClick={() => continueToStep(5)}>Continue to bottle type</button>
+              <button type="button" disabled={!catalog.quarter_hour_schedule_ready || !selectedSlotIsUpcoming} onClick={() => continueToStep(5)}>Continue to bottle type</button>
             </div>
           </section>}
           {customerResolved && areaChecked && step === 5 && <section className="panel">
@@ -489,7 +542,11 @@ export default function Order() {
                   <small>ZAM ZAM WATER</small>
                   <strong>{p.litres} Litres</strong>
                   <p className="muted">
-                    ₹{p.price} per bottle
+                    {p.has_slot_price ? (
+                      <><strong>₹{p.price}</strong> selected-slot price · <s>₹{p.regular_price}</s> regular</>
+                    ) : (
+                      <>₹{p.price} per bottle</>
+                    )}
                   </p>
                   <small>Minimum {p.min_qty} · Maximum {p.max_qty}</small>
                 </div>

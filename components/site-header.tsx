@@ -41,6 +41,7 @@ export function SiteHeader() {
     setLanguage(value);
     window.localStorage.setItem("zamzam-language", value);
     document.documentElement.lang = value;
+    window.dispatchEvent(new CustomEvent("zamzam-language-change", { detail: value }));
   }
 
   const labels = navigationLabels[language];

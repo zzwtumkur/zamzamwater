@@ -1,6 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 :root {
+  color-scheme: light;
   --bg: #eef9ff;
   --bg-accent: #dff5fd;
   --bg-strong: #d9eff8;
@@ -27,6 +28,7 @@
 }
 
 html[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #071a26;
   --bg-accent: #0d2d3f;
   --bg-strong: #1a4057;
@@ -476,7 +478,56 @@ footer a { color: #9ce5ff; font-weight: 800; }
 
 .container { width: min(1120px, calc(100% - 32px)); margin: 34px auto; }
 .narrow { max-width: 840px; }
-.order-shell { padding-bottom: 40px; }
+.order-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  padding-bottom: 40px;
+}
+
+.order-shell::before,
+.order-shell::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  filter: blur(1px);
+}
+
+.order-shell::before {
+  top: 120px;
+  right: -70px;
+  width: 230px;
+  height: 230px;
+  border: 2px solid rgba(34, 177, 226, 0.24);
+  border-radius: 58% 42% 65% 35% / 46% 58% 42% 54%;
+  background:
+    radial-gradient(circle at 32% 30%, rgba(126, 226, 255, 0.32) 0 8%, transparent 9%),
+    linear-gradient(145deg, rgba(90, 206, 244, 0.13), transparent 68%);
+  animation: water-vector-float 10s ease-in-out infinite alternate;
+}
+
+.order-shell::after {
+  bottom: 70px;
+  left: -60px;
+  width: 180px;
+  height: 260px;
+  border: 2px solid rgba(11, 142, 201, 0.18);
+  border-radius: 65% 35% 55% 45% / 38% 60% 40% 62%;
+  background: radial-gradient(circle at 60% 65%, rgba(111, 216, 255, 0.22), transparent 55%);
+  animation: water-vector-drift 13s ease-in-out infinite alternate;
+}
+
+@keyframes water-vector-float {
+  from { transform: translate3d(0, -8px, 0) rotate(-7deg); }
+  to { transform: translate3d(-34px, 34px, 0) rotate(15deg); }
+}
+
+@keyframes water-vector-drift {
+  from { transform: translate3d(-8px, 18px, 0) rotate(8deg); }
+  to { transform: translate3d(38px, -28px, 0) rotate(-12deg); }
+}
 
 .order-intro {
   display: grid;
@@ -718,6 +769,48 @@ form.grid > button {
   font-weight: 700;
 }
 
+.customer-summary-row td {
+  vertical-align: middle;
+}
+
+.customer-summary-row.expanded {
+  background: rgba(48, 174, 224, 0.08);
+}
+
+.customer-address-preview {
+  display: block;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-editor-row > td {
+  padding: 20px;
+  background: var(--surface-soft);
+}
+
+.customer-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.customer-editor-grid .field {
+  margin: 0;
+}
+
+.customer-address-field {
+  grid-column: 1 / -1;
+}
+
+.customer-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 .report-layout {
   display: block;
 }
@@ -910,6 +1003,14 @@ button.secondary, .btn.secondary {
   border: 1px solid var(--border);
   box-shadow: none;
 }
+button.danger, .btn.danger {
+  background: #b42318;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(180, 35, 24, 0.2);
+}
+button.danger:hover, .btn.danger:hover {
+  background: #912018;
+}
 button:disabled, .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -988,6 +1089,67 @@ button:disabled, .btn:disabled {
 }
 
 .tracking-head { align-items: flex-start; }
+.tracking-choice-panel {
+  text-align: center;
+}
+
+.tracking-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.tracking-choice-grid > button {
+  min-height: 116px;
+  justify-content: flex-start;
+  padding: 20px;
+  text-align: left;
+}
+
+.tracking-choice-grid > button > span:last-child {
+  display: grid;
+  gap: 5px;
+}
+
+.tracking-choice-grid small {
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.tracking-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 1.5rem;
+}
+
+.tracking-choice-grid > button.secondary .tracking-choice-icon {
+  background: rgba(15, 132, 190, 0.12);
+}
+
+.tracking-change-number {
+  margin-top: 18px;
+}
+
+.tracking-view-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.tracking-view-switcher {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .tracking-total {
   font-size: clamp(1.5rem, 3vw, 2.2rem);
   color: var(--primary-strong);
@@ -1044,6 +1206,57 @@ button:disabled, .btn:disabled {
   border-color: rgba(38, 146, 89, 0.2);
 }
 
+.upi-app-picker {
+  margin: 18px 0 10px;
+}
+
+.upi-app-picker h3 {
+  margin: 0 0 6px;
+  color: var(--text-strong);
+}
+
+.upi-app-picker > .muted {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+}
+
+.upi-app-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.upi-app-options > button {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-strong);
+  box-shadow: none;
+  white-space: normal;
+}
+
+.upi-app-options > button:hover {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+
+.upi-app-options > button.secondary {
+  background: rgba(15, 101, 145, 0.08);
+}
+
+@media (max-width: 640px) {
+  .upi-app-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .upi-app-options > button:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
   .public-hero, .public-benefits { grid-template-columns: 1fr; }
   .public-copy { max-width: 100%; text-align: center; }
@@ -1070,12 +1283,182 @@ button:disabled, .btn:disabled {
   .grid, .product-card, .phone-lookup, .pincode-check, .report-filters { display: grid; grid-template-columns: 1fr; }
   .qty { width: 100%; justify-content: space-between; }
   .tracking-head, .order-history-head, .returning-orders > div, .phone-lookup, .pincode-check, footer { flex-direction: column; align-items: flex-start; }
+  .tracking-choice-grid { grid-template-columns: 1fr; }
+  .tracking-choice-grid > button { min-height: 96px; }
+  .tracking-view-actions, .tracking-view-switcher { display: grid; grid-template-columns: 1fr; }
+  .tracking-view-actions button, .tracking-view-switcher button, .tracking-change-number { width: 100%; }
   footer { padding-bottom: 80px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; }
+}
+
+/* Keep every form and data surface readable in both explicit themes. */
+.order-shell > form {
+  width: min(880px, 100%);
+  margin-inline: auto;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary-strong);
+}
+
+select option {
+  background: var(--surface-solid);
+  color: var(--text-strong);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.recent-orders-link {
+  margin: 4px 0 18px;
+}
+
+html[data-theme="dark"] body {
+  background:
+    linear-gradient(180deg, rgba(3, 18, 28, 0.72), rgba(3, 15, 24, 0.88)),
+    url("https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1800&q=80") center top / cover no-repeat fixed,
+    var(--bg);
+}
+
+html[data-theme="dark"] body::before {
+  background: linear-gradient(135deg, rgba(42, 139, 184, 0.08), rgba(0, 0, 0, 0.22));
+}
+
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .public-benefits article,
+html[data-theme="dark"] .summary,
+html[data-theme="dark"] .report-filters,
+html[data-theme="dark"] .stat,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .choice,
+html[data-theme="dark"] .product-card,
+html[data-theme="dark"] .order-progress,
+html[data-theme="dark"] .returning-orders {
+  background: rgba(10, 28, 40, 0.94);
+  border-color: rgba(139, 210, 239, 0.26);
+  box-shadow: 0 20px 44px rgba(0, 7, 12, 0.42);
+}
+
+html[data-theme="dark"] .choice.selected {
+  background: linear-gradient(135deg, rgba(50, 174, 224, 0.28), rgba(17, 91, 130, 0.34));
+  border-color: rgba(111, 216, 255, 0.68);
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: #071722;
+  border-color: rgba(151, 215, 242, 0.34);
+  color: #f4fdff;
+  caret-color: #7de5ff;
+}
+
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] select:focus {
+  border-color: #6fd8ff;
+  box-shadow: 0 0 0 4px rgba(111, 216, 255, 0.2);
+}
+
+html[data-theme="dark"] input:disabled,
+html[data-theme="dark"] textarea:disabled,
+html[data-theme="dark"] select:disabled {
+  background: #10232f;
+  color: #9db7c5;
+}
+
+html[data-theme="dark"] button:not(.secondary):not(.theme-toggle):not(.menu-toggle),
+html[data-theme="dark"] .btn:not(.secondary) {
+  color: #052032;
+}
+
+html[data-theme="dark"] button.secondary,
+html[data-theme="dark"] .btn.secondary,
+html[data-theme="dark"] .tabs button,
+html[data-theme="dark"] .admin-menu-toggle {
+  background: #102b3a;
+  border-color: rgba(151, 215, 242, 0.3);
+  color: #edf9ff;
+}
+
+html[data-theme="dark"] .tabs button.active {
+  background: linear-gradient(135deg, #6fd8ff, #3da9d9);
+  border-color: transparent;
+  color: #052032;
+}
+
+html[data-theme="dark"] .table-wrap,
+html[data-theme="dark"] .tabs.tabs-open {
+  background: #0a1d29;
+  border-color: rgba(151, 215, 242, 0.25);
+}
+
+html[data-theme="dark"] .table-wrap thead th {
+  background: #123244;
+  color: #f4fdff;
+}
+
+html[data-theme="dark"] .table-wrap tbody tr:nth-child(even) {
+  background: rgba(34, 86, 113, 0.13);
+}
+
+html[data-theme="dark"] .upi-app-options > button,
+html[data-theme="dark"] .upi-app-options > button.secondary {
+  background: #102b3a;
+  border-color: rgba(151, 215, 242, 0.3);
+  color: #edf9ff;
+}
+
+html[data-theme="dark"] .payment-badge {
+  background: rgba(255, 190, 82, 0.16);
+  border-color: rgba(255, 208, 128, 0.32);
+  color: #ffd88f;
+}
+
+html[data-theme="dark"] .payment-badge.paid {
+  background: rgba(65, 193, 137, 0.16);
+  border-color: rgba(108, 223, 172, 0.3);
+  color: #9af0c9;
+}
+
+html[data-theme="dark"] .order-progress-track {
+  background: rgba(155, 218, 244, 0.2);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 18px 15px;
+    border-radius: 18px;
+  }
+
+  .product-card {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .phone-lookup > button,
+  .pincode-check > button,
+  .service-check > button.secondary,
+  .recent-orders-link {
+    width: 100%;
+  }
+
+  .summary div {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 800px) {
@@ -1319,17 +1702,20 @@ button:disabled, .btn:disabled {
 }
 
 .order-step-screen {
-  animation: order-step-enter 0.32s cubic-bezier(0.2, 0.7, 0.25, 1) both;
+  transform-origin: center top;
+  animation: order-step-enter 0.46s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes order-step-enter {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    filter: blur(5px);
+    transform: translate3d(34px, 0, 0) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -1378,7 +1764,333 @@ button:disabled, .btn:disabled {
     animation: none;
   }
 
+  .order-shell::before,
+  .order-shell::after {
+    animation: none;
+  }
+
   .order-progress-track span {
     transition: none;
+  }
+}
+
+/* Responsive finishing pass: customer flows and admin tools. */
+.table-wrap {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: var(--primary-strong) var(--surface-soft);
+  scrollbar-width: thin;
+}
+
+.table-wrap td:last-child {
+  white-space: nowrap;
+}
+
+.table-wrap td:last-child button {
+  margin: 2px;
+}
+
+.admin-hero > div,
+.section-heading > div,
+.tracking-head > div,
+.product-card > div {
+  min-width: 0;
+}
+
+.summary span:first-child,
+.tracking-result,
+.panel,
+.notice,
+.error {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1024px) {
+  .container {
+    width: min(100% - 28px, 1120px);
+    margin-block: 26px;
+  }
+
+  .admin-layout {
+    width: min(100% - 24px, 1120px);
+  }
+
+  .public-home {
+    width: min(100% - 28px, 1280px);
+  }
+
+  .product-create,
+  .slot-create,
+  .price-create,
+  .pincode-create {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table-wrap table {
+    min-width: 760px;
+  }
+}
+
+@media (max-width: 800px) {
+  .admin-hero,
+  .section-heading {
+    align-items: stretch;
+  }
+
+  .admin-hero > .inline,
+  .section-heading > .inline,
+  .report-actions {
+    width: 100%;
+  }
+
+  .admin-hero > .inline button,
+  .report-actions button {
+    flex: 1 1 180px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat {
+    min-height: 104px;
+    padding: 16px;
+  }
+
+  .table-wrap {
+    margin-inline: -4px;
+    border-radius: 14px;
+  }
+
+  .table-wrap table {
+    min-width: 680px;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  main {
+    min-height: calc(100vh - 170px);
+  }
+
+  .container,
+  .admin-layout {
+    width: min(100% - 18px, 1120px);
+    margin-block: 16px;
+  }
+
+  .public-home {
+    width: min(100% - 18px, 1280px);
+    padding-top: 18px;
+  }
+
+  .public-copy h1,
+  .order-intro h1 {
+    font-size: clamp(2.35rem, 13vw, 3rem);
+  }
+
+  .public-copy > p,
+  .order-intro p,
+  .muted {
+    font-size: 0.96rem;
+    line-height: 1.65;
+  }
+
+  .panel h1,
+  .panel h2 {
+    letter-spacing: -0.035em;
+  }
+
+  .stats,
+  .product-create,
+  .slot-create,
+  .price-create,
+  .pincode-create,
+  form.grid,
+  .report-filters {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .stat {
+    min-height: 92px;
+  }
+
+  .product-create > button,
+  .slot-create > button,
+  .price-create > button,
+  .pincode-create > button,
+  form.grid > button,
+  .report-actions button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  input,
+  textarea,
+  select,
+  button,
+  .btn {
+    min-height: 46px;
+  }
+
+  input,
+  textarea,
+  select {
+    padding: 12px 13px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+  }
+
+  .inline {
+    align-items: flex-start;
+  }
+
+  .product-card img {
+    width: 78px;
+    height: 94px;
+    justify-self: center;
+  }
+
+  .qty button {
+    min-width: 52px;
+  }
+
+  .summary {
+    padding: 14px;
+  }
+
+  .summary div {
+    gap: 10px;
+  }
+
+  .summary div > :last-child {
+    flex: 0 0 auto;
+    text-align: right;
+  }
+
+  .tracking-head {
+    gap: 8px;
+  }
+
+  .tracking-total {
+    align-self: flex-start;
+  }
+
+  .upi-app-options {
+    grid-template-columns: 1fr;
+  }
+
+  .upi-app-options > button:last-child {
+    grid-column: auto;
+  }
+
+  .table-wrap table {
+    min-width: 640px;
+  }
+
+  .table-wrap th,
+  .table-wrap td {
+    padding: 10px;
+  }
+
+  .customer-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-address-field {
+    grid-column: auto;
+  }
+
+  .customer-editor-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .customer-editor-actions button {
+    width: 100%;
+  }
+
+  footer {
+    align-items: center;
+    text-align: center;
+  }
+
+  .whatsapp {
+    right: 12px;
+    bottom: 12px;
+    padding: 12px 15px;
+    font-size: 0.86rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .header {
+    min-height: 66px;
+  }
+
+  .brand {
+    width: clamp(112px, 34vw, 138px);
+    height: 48px;
+  }
+
+  .order-now-link {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .menu-toggle {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .panel {
+    padding: 16px 13px;
+  }
+
+  .order-progress-labels {
+    display: none;
+  }
+
+  .order-progress-track {
+    margin-bottom: 2px;
+  }
+
+  .wizard-actions {
+    flex-direction: column-reverse;
+  }
+
+  .wizard-actions button {
+    width: 100%;
+    flex: none;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-hero > .inline,
+  .report-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .table-wrap table {
+    min-width: 600px;
   }
 }

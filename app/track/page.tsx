@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type TrackedOrder = {
   order_number: string;
@@ -22,6 +23,37 @@ type PaymentRequest = {
   status: "pending" | "customer_reported" | "paid" | "cancelled";
   created_at: string;
 };
+const upiApps = [
+  { name: "PhonePe", packageName: "com.phonepe.app" },
+  { name: "Google Pay", packageName: "com.google.android.apps.nbu.paisa.user" },
+  { name: "Super.money", packageName: "money.super.payments" },
+  { name: "Paytm", packageName: "net.one97.paytm" },
+  { name: "WhatsApp Pay", packageName: "com.whatsapp" },
+  { name: "CRED UPI", packageName: "com.dreamplug.androidapp" },
+  { name: "Other UPI apps", packageName: null },
+] as const;
+
+function openUpiApp(request: PaymentRequest, packageName: string | null) {
+  const params = new URLSearchParams({
+    pa: request.upi_id,
+    pn: "Zam Zam Water",
+    am: Number(request.amount).toFixed(2),
+    cu: "INR",
+    tn: `Payment ${request.id}`,
+  });
+  const paymentUri = `upi://pay?${params.toString()}`;
+
+  if (!packageName || !/android/i.test(navigator.userAgent)) {
+    window.location.href = paymentUri;
+    return;
+  }
+
+  window.location.href = `intent://pay?${params.toString()}#Intent;scheme=upi;package=${packageName};end`;
+  window.setTimeout(() => {
+    if (document.visibilityState === "visible") window.location.href = paymentUri;
+  }, 900);
+}
+
 const labels: Record<string, string> = {
   new: "Order received",
   accepted: "Accepted",
@@ -35,7 +67,8 @@ const labels: Record<string, string> = {
   rescheduled: "Rescheduled",
 };
 
-export default function TrackOrder() {
+export function TrackOrder({ initialView = null }: { initialView?: "history" | "payments" | null }) {
+  const router = useRouter();
   const [phone, setPhone] = useState("");
   const [searchedPhone, setSearchedPhone] = useState("");
   const [orders, setOrders] = useState<TrackedOrder[]>([]);
@@ -45,8 +78,10 @@ export default function TrackOrder() {
   const [reportingPaymentId, setReportingPaymentId] = useState<string | null>(null);
   const [transactionReferences, setTransactionReferences] = useState<Record<string, string>>({});
   const [reportingBusy, setReportingBusy] = useState(false);
+  const [view, setView] = useState<"history" | "payments" | null>(initialView);
+  const initialLookupStarted = useRef(false);
 
-  async function loadTracking(e?: React.FormEvent) {
+  async function loadTracking(e?: React.FormEvent, lookupPhone = phone) {
     e?.preventDefault();
     setBusy(true);
     setMessage("");
@@ -54,14 +89,19 @@ export default function TrackOrder() {
       const response = await fetch("/api/order/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone: lookupPhone }),
         cache: "no-store",
       });
       const result = await response.json();
       if (!response.ok) throw Error(result.error || "Unable to track orders");
-      setOrders(result.orders || []);
-      setPaymentRequests(result.payment_requests || []);
-      setSearchedPhone(phone);
+      setOrders([...(result.orders || [])].sort(
+        (a: TrackedOrder, b: TrackedOrder) => Date.parse(b.created_at) - Date.parse(a.created_at),
+      ));
+      setPaymentRequests([...(result.payment_requests || [])].sort(
+        (a: PaymentRequest, b: PaymentRequest) => Date.parse(b.created_at) - Date.parse(a.created_at),
+      ));
+      setPhone(lookupPhone);
+      setSearchedPhone(lookupPhone);
       if (!result.orders?.length && !result.payment_requests?.length)
         setMessage("No orders or payment requests found for this mobile number.");
     } catch (e) {
@@ -69,6 +109,49 @@ export default function TrackOrder() {
     } finally {
       setBusy(false);
     }
+  }
+
+  useEffect(() => {
+    if (initialLookupStarted.current) return;
+    initialLookupStarted.current = true;
+    const requestedPhone = new URLSearchParams(window.location.search).get("phone") || "";
+    const requestedView = window.location.pathname.endsWith("/history") ? "history"
+      : window.location.pathname.endsWith("/payments") ? "payments"
+      : new URLSearchParams(window.location.search).get("view");
+    if (requestedView === "history" || requestedView === "payments") setView(requestedView);
+    if (/^[6-9]\d{9}$/.test(requestedPhone)) {
+      void loadTracking(undefined, requestedPhone);
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncView = () => {
+      const requestedView = window.location.pathname.endsWith("/history") ? "history"
+        : window.location.pathname.endsWith("/payments") ? "payments"
+        : new URLSearchParams(window.location.search).get("view");
+      setView(requestedView === "history" || requestedView === "payments" ? requestedView : null);
+    };
+    window.addEventListener("popstate", syncView);
+    return () => window.removeEventListener("popstate", syncView);
+  }, []);
+
+  function selectView(nextView: "history" | "payments" | null) {
+    const params = new URLSearchParams();
+    if (searchedPhone) params.set("phone", searchedPhone);
+    const path = nextView ? `/track/${nextView}` : "/track";
+    router.push(`${path}${params.size ? `?${params.toString()}` : ""}`);
+    setView(nextView);
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function changeMobileNumber() {
+    router.push("/track");
+    setSearchedPhone("");
+    setView(null);
+    setMessage("");
+    setOrders([]);
+    setPaymentRequests([]);
   }
 
   async function reportPayment(e: React.FormEvent, request: PaymentRequest) {
@@ -100,9 +183,9 @@ export default function TrackOrder() {
   return (
     <div className="container narrow">
       <div className="eyebrow">ORDER UPDATES</div>
-      <h1>Track all your orders</h1>
-      <p className="muted">Enter only the mobile number used while ordering.</p>
-      <form className="panel" onSubmit={loadTracking}>
+      <h1>{view === "history" ? "Order History" : view === "payments" ? "Payments" : "Track orders and payments"}</h1>
+      <p className="muted">{searchedPhone === phone ? `Mobile number: ${phone}` : "Enter only the mobile number used while ordering."}</p>
+      {searchedPhone !== phone && <form className="panel" onSubmit={loadTracking}>
         <div className="field">
           <label>Mobile Number</label>
           <input
@@ -118,13 +201,43 @@ export default function TrackOrder() {
             }}
           />
         </div>
-        {message && <div className={message.startsWith("Payment reported.") ? "notice" : "error"}>{message}</div>}
         <button disabled={busy} style={{ width: "100%" }}>
-          {busy ? "Checking..." : searchedPhone && searchedPhone === phone ? "Refresh Order Status" : "View My Orders"}
+          {busy ? "Checking..." : "Continue"}
         </button>
-      </form>
+      </form>}
 
-      {searchedPhone === phone && orders.length > 0 && (
+      {searchedPhone === phone && message && <div className={message.startsWith("Payment reported.") ? "notice" : "error"}>{message}</div>}
+
+      {searchedPhone === phone && !view && (
+        <section className="panel tracking-choice-panel">
+          <h2>What would you like to open?</h2>
+          <p className="muted">Payments and order history are shown on separate pages.</p>
+          <div className="tracking-choice-grid">
+            <button type="button" onClick={() => selectView("payments")}>
+              <span className="tracking-choice-icon">₹</span>
+              <span><strong>Payments</strong><small>{paymentRequests.length} payment request{paymentRequests.length === 1 ? "" : "s"}</small></span>
+            </button>
+            <button type="button" className="secondary" onClick={() => selectView("history")}>
+              <span className="tracking-choice-icon">↺</span>
+              <span><strong>Orders</strong><small>{orders.length} order{orders.length === 1 ? "" : "s"}</small></span>
+            </button>
+          </div>
+          <button type="button" className="secondary tracking-change-number" onClick={changeMobileNumber}>Use another mobile number</button>
+        </section>
+      )}
+
+      {searchedPhone === phone && view && (
+        <div className="tracking-view-actions">
+          <button type="button" className="secondary" onClick={() => selectView(null)}>← Back to Payments or Order History</button>
+          <div className="tracking-view-switcher">
+            {view !== "payments" && <button type="button" className="secondary" onClick={() => selectView("payments")}>Payments</button>}
+            {view !== "history" && <button type="button" className="secondary" onClick={() => selectView("history")}>Order History</button>}
+            <button type="button" className="secondary" disabled={busy} onClick={() => void loadTracking()}>{busy ? "Refreshing..." : "Refresh"}</button>
+          </div>
+        </div>
+      )}
+
+      {searchedPhone === phone && view === "history" && orders.length > 0 && (
         <>
           <div className="order-history-head">
             <h2>{orders[0].name}&apos;s order history</h2>
@@ -157,8 +270,11 @@ export default function TrackOrder() {
           ))}
         </>
       )}
+      {searchedPhone === phone && view === "history" && orders.length === 0 && (
+        <section className="panel"><h2>No orders found</h2><p className="muted">New orders will appear here at the top.</p></section>
+      )}
 
-      {searchedPhone === phone && paymentRequests.length > 0 && (
+      {searchedPhone === phone && view === "payments" && paymentRequests.length > 0 && (
         <section className="panel">
           <h2>Payment requests</h2>
           <p className="muted">After paying, allow the business to verify the payment. Your request status will update after confirmation.</p>
@@ -177,13 +293,23 @@ export default function TrackOrder() {
               {request.status === "pending" && (
                 <>
                   <img src={request.qr_data_url} alt="UPI payment QR code" style={{ display: "block", width: 220, height: 220, objectFit: "contain", margin: "12px auto" }} />
-                  <a
-                    className="btn"
-                    href={`upi://pay?pa=${encodeURIComponent(request.upi_id)}&pn=Zam%20Zam%20Water&am=${encodeURIComponent(Number(request.amount).toFixed(2))}&cu=INR&tn=${encodeURIComponent(`Payment ${request.id}`)}`}
-                  >
-                    Pay ₹{Number(request.amount).toFixed(2)} with UPI
-                  </a>
-                  <p className="muted">If the button does not open your UPI app, scan the QR code above. Payment is not automatically confirmed.</p>
+                  <div className="upi-app-picker">
+                    <h3>Choose a UPI app</h3>
+                    <p className="muted">Pay ₹{Number(request.amount).toFixed(2)} to {request.upi_id}</p>
+                    <div className="upi-app-options">
+                      {upiApps.map((app) => (
+                        <button
+                          key={app.name}
+                          type="button"
+                          className={app.name === "Other UPI apps" ? "secondary" : "upi-app-option"}
+                          onClick={() => openUpiApp(request, app.packageName)}
+                        >
+                          {app.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="muted">If an app is unavailable, choose Other UPI apps or scan the QR code. Payment is not automatically confirmed.</p>
                   {reportingPaymentId === request.id ? (
                     <form onSubmit={e=>void reportPayment(e, request)}>
                       <div className="field">
@@ -209,6 +335,11 @@ export default function TrackOrder() {
           ))}
         </section>
       )}
+      {searchedPhone === phone && view === "payments" && paymentRequests.length === 0 && (
+        <section className="panel"><h2>No payment requests</h2><p className="muted">New payment requests will appear here at the top.</p></section>
+      )}
     </div>
   );
 }
+
+export default TrackOrder;

@@ -41,20 +41,25 @@ export async function GET() {
   ]);
   if (p.error || s.error || c.error)
     return error("Unable to load catalog", 500);
-  const indiaTime = new Intl.DateTimeFormat("en-GB", { timeZone:"Asia/Kolkata", hour:"2-digit", minute:"2-digit", hourCycle:"h23" }).format(new Date());
-  const prices = new Map<string, number>();
-  if (!scheduled.error)
-    for (const row of scheduled.data || [])
-      if ((row.start_time < row.end_time && row.start_time.slice(0,5) <= indiaTime && row.end_time.slice(0,5) > indiaTime) || (row.start_time > row.end_time && (row.start_time.slice(0,5) <= indiaTime || row.end_time.slice(0,5) > indiaTime)))
-        prices.set(row.product_id, Number(row.price));
+  const quarterHourSlots = (s.data || []).filter((slot) => {
+    const [startHour, startMinute] = String(slot.start_time).slice(0, 5).split(":").map(Number);
+    const [endHour, endMinute] = String(slot.end_time).slice(0, 5).split(":").map(Number);
+    if (![startHour, startMinute, endHour, endMinute].every(Number.isFinite)) return false;
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    return start % 15 === 0 && (end - start + 1440) % 1440 === 15;
+  });
   return Response.json({
     products: p.data.map((product) => ({
       ...product,
-      price: prices.get(product.id) ?? Number(product.price),
-      regular_price: Number(product.price),
-      scheduled: prices.has(product.id),
+      price: Number(product.price),
     })),
-    slots: s.data,
+    pricing_windows: scheduled.error ? [] : (scheduled.data || []).map((window) => ({
+      ...window,
+      price: Number(window.price),
+    })),
+    slots: quarterHourSlots,
+    quarter_hour_schedule_ready: quarterHourSlots.length === 96,
     settings: c.data,
   });
 }
@@ -73,11 +78,31 @@ export async function POST(req: Request) {
     day: "2-digit",
   }).format(new Date());
   if (x.date < today) return error("Select today or a future date");
+  const { data: slot, error: slotError } = await client
+    .from("slots")
+    .select("id,start_time,end_time,active")
+    .eq("id", x.slot_id)
+    .maybeSingle();
+  if (slotError) return error("Unable to verify the selected delivery time", 500);
+  if (!slot?.active) return error("Select an active delivery time");
+  const [startHour, startMinute] = String(slot.start_time).slice(0, 5).split(":").map(Number);
+  const [endHour, endMinute] = String(slot.end_time).slice(0, 5).split(":").map(Number);
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  if (![startHour, startMinute, endHour, endMinute].every(Number.isFinite)
+    || startMinutes % 15 !== 0
+    || (endMinutes - startMinutes + 1440) % 1440 !== 15)
+    return error("Select an available 15-minute delivery slot");
+  const [year, month, day] = x.date.split("-").map(Number);
+  const deliveryAt = Date.UTC(year, month - 1, day, startHour, startMinute) - 330 * 60 * 1000;
+  if (!Number.isFinite(deliveryAt) || deliveryAt <= Date.now())
+    return error("Choose an upcoming delivery date and time in IST");
   const ids = x.items.map((i) => i.product_id);
   if (new Set(ids).size !== ids.length) return error("Duplicate product lines");
   const { data, error: e } = await client.rpc("place_order", {
     p_name: x.name,
     p_phone: x.phone,
+    p_pincode: x.pincode,
     p_address: x.address,
     p_landmark: x.landmark,
     p_lat: x.lat ?? null,
